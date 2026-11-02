@@ -29,7 +29,21 @@ npx remotion render TechRace out/hn-tech-race.mp4
 Copy lives in `src/race/content.ts`; the verdict ("X 连续 N 年第一") is computed from the
 data. Language patterns are in `scripts/export_data.py` (`LANGUAGES`).
 
-## On this day
+## On this day, daily
+
+`scripts/daily.py` runs the daily pipeline in `out/daily/<date>/`:
+
+```bash
+../.venv/Scripts/python.exe scripts/daily.py prepare   # refresh index, write candidates.json
+# write curated.json: story ids + Chinese titles (the hn-daily-video skill says how)
+../.venv/Scripts/python.exe scripts/daily.py render    # validate, merge scores, render the MP4
+```
+
+The curation rules live in the Claude Code skill `.claude/skills/hn-daily-video/`, so
+"make today's HN video" in a Claude Code session in this repo runs all of it; a
+scheduled task in the Claude desktop app does that every morning.
+
+## On this day, by hand
 
 1. Refresh the index: `../.venv/Scripts/python.exe -m hn_mcp sync --live-only`
 2. Export candidates: `../.venv/Scripts/python.exe scripts/export_data.py onthisday --date 11-02`
