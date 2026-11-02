@@ -10,4 +10,4 @@ wheels/
 .venv
 
 # Local story index
-data/
+/data/
