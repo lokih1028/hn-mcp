@@ -31,17 +31,16 @@ data. Language patterns are in `scripts/export_data.py` (`LANGUAGES`).
 
 ## On this day, daily
 
-`scripts/daily.py` runs the daily pipeline in `out/daily/<date>/`:
+The daily video is a one-shot, code-only film of one story's subject: a device, the
+interface of the time, a process or a scene (the first one: the iPhone X teardown in
+`src/spike/`). The whole process lives in the Claude Code
+skill `.claude/skills/hn-oneshot-video/`, so "make today's HN video" in a Claude Code
+session in this repo follows it. It starts from the candidates that
+`scripts/daily.py` writes:
 
 ```bash
-../.venv/Scripts/python.exe scripts/daily.py prepare   # refresh index, write candidates.json
-# write curated.json: story ids + Chinese titles (the hn-daily-video skill says how)
-../.venv/Scripts/python.exe scripts/daily.py render    # validate, merge scores, render the MP4
+../.venv/Scripts/python.exe scripts/daily.py prepare   # refresh index, write out/daily/<date>/candidates.json
 ```
-
-The curation rules live in the Claude Code skill `.claude/skills/hn-daily-video/`, so
-"make today's HN video" in a Claude Code session in this repo runs all of it; a
-scheduled task in the Claude desktop app does that every morning.
 
 ## On this day, by hand
 

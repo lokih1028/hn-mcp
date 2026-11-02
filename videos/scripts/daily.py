@@ -2,11 +2,13 @@
 
     python scripts/daily.py prepare [--date 2026-11-03]   # sync index, write candidates.json
     (an editor - person or Claude - writes curated.json next to it)
+    python scripts/daily.py images  [--date 2026-11-03]   # one Grok image per story (cached)
     python scripts/daily.py render  [--date 2026-11-03]   # validate, merge, render the MP4
 
 Everything for one day lives in videos/out/daily/<date>/. curated.json only names
-story ids and Chinese titles; scores, comments and domains are merged in from
-candidates.json so they cannot drift from the data.
+story ids, Chinese titles and image prompts; scores, comments and domains are
+merged in from candidates.json so they cannot drift from the data. `render`
+makes the 3D TimeTunnel video; `render --classic` the flat TimeMachine one.
 """
 
 from __future__ import annotations
@@ -27,6 +29,10 @@ os.environ.setdefault("HN_MCP_DATA", str(VIDEOS.parent / "data"))
 FPS = 30
 ZH_LINE_EM = 11.5  # 72px title in the 796px card
 MIN_STORIES, MAX_STORIES = 6, 10
+IMG_STYLE = ("warm orange and deep teal lighting, cinematic volumetric light, subtle film grain, "
+             "no text, no logos, no people")
+TUNNEL_TIMING = {"hookFrames": 3 * FPS, "travelFrames": round(1.2 * FPS), "holdFrames": round(3.4 * FPS),
+                 "outroFrames": 3 * FPS}
 
 
 def day_dir(date: dt.date) -> Path:
@@ -86,8 +92,13 @@ def build_props(date: dt.date, candidates: dict, curated: dict) -> tuple[dict, l
             if em_width(line) > ZH_LINE_EM:
                 problems.append(f"{src['year']}: line too wide ({em_width(line):.1f} > {ZH_LINE_EM} em), "
                                 f"add a \\n: {line!r}")
+        img = (pick.get("img") or "").strip()
+        if not img:
+            problems.append(f"{src['year']}: img (image prompt) is empty")
+        elif len(img) > 400:
+            problems.append(f"{src['year']}: img prompt is {len(img)} characters (max 400)")
         stories.append({"year": src["year"], "title": src["title"], "zh": zh, "score": src["score"],
-                        "comments": src["comments"], "domain": src["domain"]})
+                        "comments": src["comments"], "domain": src["domain"], "img": img})
 
     years = [s["year"] for s in stories]
     if not MIN_STORIES <= len(stories) <= MAX_STORIES:
@@ -111,27 +122,78 @@ def build_props(date: dt.date, candidates: dict, curated: dict) -> tuple[dict, l
     return props, problems
 
 
-def render(date: dt.date) -> Path:
+def load_props(date: dt.date) -> dict:
     folder = day_dir(date)
     candidates = json.loads((folder / "candidates.json").read_text(encoding="utf-8"))
     curated = json.loads((folder / "curated.json").read_text(encoding="utf-8"))
     props, problems = build_props(date, candidates, curated)
     if problems:
         sys.exit("curated.json needs fixes:\n- " + "\n- ".join(problems))
+    return props
+
+
+def images(date: dt.date) -> Path:
+    """Generate one 9:16 Grok image per story; existing images are kept."""
+    folder = day_dir(date) / "img"
+    folder.mkdir(exist_ok=True)
+    failed = []
+    for story in load_props(date)["stories"]:
+        out = folder / f"{story['year']}.png"
+        for _ in range(2):  # one retry
+            if out.exists():
+                break
+            result = subprocess.run(
+                [shutil.which("grok-cli") or "grok-cli", "image", "--json", "--prompt",
+                 f"{story['img']}, {IMG_STYLE}", "--aspect-ratio", "9:16", "--response-format", "b64_json",
+                 "--output-file", str(out)],
+                capture_output=True, text=True, encoding="utf-8")
+            if not out.exists():
+                print(f"{story['year']}: {result.stdout.strip() or result.stderr.strip()}", flush=True)
+        if not out.exists():
+            failed.append(story["year"])
+    if failed:
+        print(f"no image for {failed}; those portals stay dark. Fix the error and run images again.")
+    return folder
+
+
+def render(date: dt.date, classic: bool = False) -> Path:
+    folder = day_dir(date)
+    props = load_props(date)
+    if classic:
+        composition, out = "TimeMachine", folder / f"hn-time-machine-{date.strftime('%m-%d')}.mp4"
+    else:
+        # Remotion serves images from public/ and bundles it on every render: keep only today's.
+        public = VIDEOS / "public" / "daily"
+        shutil.rmtree(public, ignore_errors=True)
+        (public / date.isoformat()).mkdir(parents=True)
+        for story in props["stories"]:
+            src = folder / "img" / f"{story['year']}.png"
+            story["image"] = None
+            if src.exists():
+                shutil.copy(src, public / date.isoformat() / src.name)
+                story["image"] = f"daily/{date.isoformat()}/{src.name}"
+        props = {k: v for k, v in props.items() if k not in ("titleFrames", "cardFrames")}
+        props["timing"] = TUNNEL_TIMING
+        composition, out = "TimeTunnel", folder / f"hn-time-tunnel-{date.strftime('%m-%d')}.mp4"
     (folder / "props.json").write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")
-    out = folder / f"hn-time-machine-{date.strftime('%m-%d')}.mp4"
-    subprocess.run([shutil.which("npx") or "npx", "remotion", "render", "TimeMachine", str(out),
-                    f"--props={folder / 'props.json'}", "--log=error"], cwd=VIDEOS, check=True)
+    subprocess.run([shutil.which("npx") or "npx", "remotion", "render", composition, str(out),
+                    f"--props={folder / 'props.json'}", "--gl=angle", "--log=error"], cwd=VIDEOS, check=True)
     return out
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("command", choices=["prepare", "render"])
+    p.add_argument("command", choices=["prepare", "images", "render"])
     p.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today(),
                    help="local calendar date, default today")
+    p.add_argument("--classic", action="store_true", help="render: flat TimeMachine instead of the 3D tunnel")
     args = p.parse_args()
-    print(prepare(args.date) if args.command == "prepare" else render(args.date))
+    if args.command == "prepare":
+        print(prepare(args.date))
+    elif args.command == "images":
+        print(images(args.date))
+    else:
+        print(render(args.date, classic=args.classic))
 
 
 if __name__ == "__main__":
