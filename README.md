@@ -34,14 +34,23 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 git clone https://github.com/lokih1028/hn-mcp && cd hn-mcp
 uv sync
-uv run hn-mcp sync            # builds the story index, ~20 min, ~380 MB
+uv run hn-mcp sync            # builds the story index (~400 MB) in ~/.hn-mcp/stories/
 ```
 
-`sync` reads only the story columns from the
+On a first run `sync` downloads the prebuilt index from the latest GitHub release
+(`hn-index.zip`). Without one (or with `--no-snapshot`) it builds the index itself:
+it reads only the story columns from the
 [open-index/hacker-news](https://huggingface.co/datasets/open-index/hacker-news)
-Parquet archive (12 GB in full), one file per month, into `~/.hn-mcp/stories/`.
-Run it again later to fetch new months; `--from 2020-01` limits the range.
-Set `HN_MCP_DATA` to keep the index somewhere else.
+Parquet archive (12 GB in full), one file per month, in about 20 minutes.
+
+Either way it then tops up from the [Algolia HN API](https://hn.algolia.com/api),
+one file per day in `stories/live/`, up to today. Keep it fresh with a daily
+
+```bash
+uv run hn-mcp sync --live-only    # re-fetches missing days and the last 3 days
+```
+
+from cron or Task Scheduler. Set `HN_MCP_DATA` to keep the index somewhere else.
 
 Register with Claude Code:
 
@@ -66,8 +75,10 @@ Or in any MCP client config:
 ## Notes
 
 - Deleted and dead (flagged/spam) stories are left out of the index.
-- The archive can lag behind HN; `index_status` shows where the local index ends and
-  `search_recent` covers the gap.
+- The archive stopped updating on 2026-08-23, and from 2025-12 on it holds each story's
+  score as of posting time (average ~2 points instead of ~19). Stories from 2025-12-01
+  on therefore come from Algolia with current scores; the archive covers everything older.
+- `index_status` shows where the local index ends; `search_recent` covers anything newer.
 - `run_sql` runs on a DuckDB connection that can only read the index folder: no other
   file access, no extensions, one `SELECT` statement per call.
 - Comments are not stored locally; `get_thread` fetches them live, so it needs network.
@@ -76,6 +87,7 @@ Or in any MCP client config:
 
 ```bash
 uv run pytest
+uv run hn-mcp pack hn-index.zip   # snapshot of the local index, to attach to a release
 ```
 
 ## License and data

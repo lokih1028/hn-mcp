@@ -3,6 +3,14 @@ name = "hn-mcp"
 version = "0.1.0"
 description = "Hacker News knowledge base as an MCP server: 20 years of stories, trends and live threads for AI agents"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["mcp", "hacker-news", "duckdb", "claude", "ai-agents"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 authors = [
     { name = "lokih1028", email = "lokih141028@gmail.com" }
 ]
@@ -12,6 +20,9 @@ dependencies = [
     "httpx>=0.28.1",
     "mcp[cli]>=2.3.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/lokih1028/hn-mcp"
 
 [project.scripts]
 hn-mcp = "hn_mcp:main"

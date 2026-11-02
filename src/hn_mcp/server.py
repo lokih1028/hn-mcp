@@ -140,8 +140,9 @@ def topic_trend(
     """How often each term appears in story titles over time (whole-word match,
     trailing * for prefix match).
 
-    Returns per-period story totals and, for each term, the number of matching
-    stories and that count per 1,000 stories, so periods are comparable.
+    Returns a per-term summary plus a compact table: one row per period with
+    the period's story total, then each term's matching-story count and that
+    count per 1,000 stories (comparable across periods).
     Good for "rise and fall" charts, e.g. terms=["rust", "go", "zig"].
     """
     terms = [t for t in terms if t.strip()][:8]
@@ -157,22 +158,26 @@ def topic_trend(
             FROM stories WHERE time >= ? AND time < ?
             GROUP BY 1 ORDER BY 1""",
         [_term_regex(t) for t in terms] + [start, stop])
-    series = []
-    for row in rows:
-        entry = {"period": row["period"], "stories": row["stories"]}
-        for i, term in enumerate(terms):
-            n = row[f"t{i}"]
-            entry[term] = {"count": n, "per_1000": round(1000 * n / row["stories"], 2)}
-        series.append(entry)
-    summary = {}
+    columns = ["period", "stories"]
     for term in terms:
-        peak = max(series, key=lambda e: e[term]["per_1000"], default=None)
+        columns += [term, f"{term} per_1000"]
+    table = []
+    for row in rows:
+        line = [row["period"], row["stories"]]
+        for i in range(len(terms)):
+            n = row[f"t{i}"]
+            line += [n, round(1000 * n / row["stories"], 2)]
+        table.append(line)
+    summary = {}
+    for i, term in enumerate(terms):
+        count_col, rate_col = 2 + 2 * i, 3 + 2 * i
+        peak = max(table, key=lambda r: r[rate_col], default=None)
         summary[term] = {
-            "total": sum(e[term]["count"] for e in series),
-            "peak_period": peak and peak["period"],
-            "peak_per_1000": peak and peak[term]["per_1000"],
+            "total": sum(r[count_col] for r in table),
+            "peak_period": peak and peak[0],
+            "peak_per_1000": peak and peak[rate_col],
         }
-    return {"summary": summary, "series": series}
+    return {"summary": summary, "columns": columns, "rows": table}
 
 
 @tool
@@ -231,8 +236,8 @@ def run_sql(sql: str, limit: int = 200) -> list[dict]:
 
 
 @tool
-def get_thread(story_id: int, max_comments: int = 150, max_depth: int = 4,
-               max_chars: int = 600) -> dict:
+def get_thread(story_id: int, max_comments: int = 60, max_depth: int = 3,
+               max_chars: int = 500) -> dict:
     """Fetch a story and its comment tree live from HN, in HN's ranking order.
 
     Each comment has its depth (0 = top level), author, direct reply count and
@@ -262,6 +267,9 @@ def index_status() -> dict:
                              strftime(min(time), '%Y-%m-%d %H:%M') AS first_story,
                              strftime(max(time), '%Y-%m-%d %H:%M') AS last_story
                       FROM stories""")[0]
-    months = sorted(p.stem for p in ix.path.glob("*.parquet"))
-    return {**row, "months": len(months), "data_dir": str(ix.path),
-            "note": "Newer stories: use search_recent. Refresh with `hn-mcp sync`."}
+    live_days = sorted(p.stem for p in ix.path.glob("live/*.parquet"))
+    return {**row,
+            "archive_months": len(list(ix.path.glob("*.parquet"))),
+            "live_days": f"{live_days[0]} .. {live_days[-1]}" if live_days else None,
+            "data_dir": str(ix.path),
+            "note": "Newer stories: use search_recent. Refresh with `hn-mcp sync --live-only`."}

@@ -1,10 +1,11 @@
 import datetime as dt
+import re
 
 import duckdb
 import pytest
 
 from hn_mcp import server
-from hn_mcp.index import Index
+from hn_mcp.index import SCHEMA, Index
 from hn_mcp.live import clean_html
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -62,7 +63,9 @@ def test_topic_trend():
     out = server.topic_trend(["rust", "c++"])
     assert out["summary"]["rust"] == {"total": 2, "peak_period": "2015", "peak_per_1000": 500.0}
     assert out["summary"]["c++"]["total"] == 1
-    assert [e["period"] for e in out["series"]] == ["2015", "2020", "2021"]
+    assert [r[0] for r in out["rows"]] == ["2015", "2020", "2021"]
+    assert out["columns"][:4] == ["period", "stories", "rust", "rust per_1000"]
+    assert out["rows"][0][:4] == ["2015", 2, 1, 500.0]
 
 
 def test_domain_report():
@@ -90,3 +93,63 @@ def test_run_sql_is_read_only():
 def test_clean_html():
     raw = 'Hi<p>See <a href="https://x.com/a" rel="nofollow">https://x.com/a</a> &amp; <i>more</i>'
     assert clean_html(raw) == "Hi\n\nSee https://x.com/a & more"
+
+
+def write_live(path, rows):
+    con = duckdb.connect()
+    con.execute(f"CREATE TABLE t ({SCHEMA})")
+    if rows:
+        con.executemany("INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    con.execute(f"COPY t TO '{path.as_posix()}' (FORMAT parquet)")
+
+
+def test_live_days_replace_archive_from_first_live_id(tmp_path):
+    (tmp_path / "live").mkdir()
+    # Fresher copy of story 4 (score 120 -> 999) plus a story newer than the archive.
+    write_live(tmp_path / "live" / "2021-11-02.parquet", [
+        (4, "d", "2021-11-02 09:00", "Ask HN: Is C++ still worth learning?", None, None, 999, 250, None),
+        (6, "f", "2021-11-03 08:00", "Rust in the kernel", None, None, 10, 1, None),
+    ])
+    write_live(tmp_path / "live" / "2021-11-04.parquet", [])  # a day with no stories
+    server._index = Index(tmp_path)
+    assert server.run_sql("select count(*) n from stories") == [{"n": 5}]  # 1-3 archive, 4 & 6 live
+    assert ids(server.search_stories("rust")) == [1, 6]  # archived 5 dropped: id >= first live id
+    assert server.search_stories('"is c++"')[0]["score"] == 999
+
+
+def test_empty_live_dir_keeps_archive(tmp_path):
+    (tmp_path / "live").mkdir()
+    write_live(tmp_path / "live" / "2021-11-04.parquet", [])
+    server._index = Index(tmp_path)
+    assert server.run_sql("select count(*) n from stories") == [{"n": 5}]
+
+
+def test_fetch_stories_splits_full_windows(monkeypatch):
+    from hn_mcp import live
+
+    calls = []
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            return self
+
+        def json(self):
+            return self.body
+
+    def fake_get(url, params):
+        lo, hi = map(int, re.findall(r"\d+",params["numericFilters"]))
+        calls.append((lo, hi))
+        stories = [t for t in range(0, 10_000, 1000) if lo <= t < hi]  # 10 stories
+        hits = [{"objectID": str(t + 1), "created_at_i": t, "title": f"s{t}",
+                 "url": "https://www.Example.com/x"} for t in stories[:4]]  # cap of 4
+        return Resp({"nbHits": len(stories), "hits": hits})
+
+    monkeypatch.setattr(live, "ALGOLIA_MAX_HITS", 4)
+    monkeypatch.setattr(live._client, "get", fake_get)
+    rows = live.fetch_stories(0, 10_000)
+    assert sorted(r[0] for r in rows) == [t + 1 for t in range(0, 10_000, 1000)]
+    assert rows[0][5] == "example.com"
+    assert len(calls) > 1
