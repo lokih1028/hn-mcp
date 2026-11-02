@@ -10,7 +10,7 @@ CANDIDATES = {"stories": [
 
 
 def picks(years, zh="短标题"):
-    return {"stories": [{"id": 100 + y, "zh": zh} for y in years]}
+    return {"stories": [{"id": 100 + y, "zh": zh, "img": "a desk at night"} for y in years]}
 
 
 def test_em_width_matches_rendered_lines():
@@ -24,7 +24,7 @@ def test_merge_takes_numbers_from_candidates():
     assert problems == []
     first = props["stories"][0]
     assert first == {"year": 2008, "title": "Story 2008", "zh": "短标题", "score": 8, "comments": 7,
-                     "domain": "x.com"}
+                     "domain": "x.com", "img": "a desk at night"}
     assert props["hook"]["kicker"] == "11 月 3 日"
     assert props["hook"]["subtitle"] == "18 年来的这一天，HN 在聊什么？"
 
@@ -41,3 +41,4 @@ def test_problems_are_reported():
     assert "4 lines" in text
     assert "2 stories picked" in text
     assert "oldest first" in text
+    assert "img (image prompt) is empty" in text
