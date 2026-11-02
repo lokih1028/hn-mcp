@@ -67,7 +67,7 @@
 ### 8. 不要用的旧东西
 
 - `videos/scripts/daily.py images`（调用 grok-cli 生图）是已经放弃的旧流程，不需要安装 grok-cli。现在只用 `daily.py prepare` 生成候选。
-- `videos/src/episode/`、`tunnel/`、`rings/` 是被否掉的原型，只是保留着，不要拿来做新视频。
+- `videos/src/episode/`、`tunnel/`、`rings/` 是被否掉的原型，只是保留着，不要拿来做新视频。隧道原型（`TimeTunnel`）用的 AI 图片已从仓库删除，这个 composition 现在渲染不出来，属于正常情况。
 
 ## 验证环境是否跑通
 
