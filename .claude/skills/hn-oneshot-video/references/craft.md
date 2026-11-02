@@ -40,6 +40,7 @@
 
 ## 渲染与检查
 
-- `--gl=angle` 走 Direct3D11，用的是本机 RTX 3070。可以用 `GpuProbe` composition 确认，它会打印 `UNMASKED_RENDERER_WEBGL`。三维渲染在 GPU 上做，视频编码（x264）在 CPU 上做。
+- 渲染方式由 `remotion.config.ts` 自动选择：有 GPU 用 `angle`（本机走 Direct3D11、RTX 3070），没有 GPU 的 Linux 用 `swangle`（CPU 软件渲染，画面一致，慢约 15 倍）。可以用 `HN_GL` 环境变量强制指定。`GpuProbe` 会打印 `UNMASKED_RENDERER_WEBGL`，用来确认实际走的是哪一种。视频编码（x264）始终在 CPU 上做。
+- CPU 渲染很慢，所以检查画面时更要先渲关键帧静帧，确认没问题再渲整片。
 - Remotion 自带的 ffmpeg 没有 fps/select/scale/tile 滤镜。抽帧用 `-ss <秒> -frames:v 1`，拼图用 PIL，见 `scripts/contact_sheet.py`。
 - 单帧检查用 `remotion still --frame=N`，大约 14 秒出一张（含打包时间）。

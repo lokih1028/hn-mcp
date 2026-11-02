@@ -31,6 +31,10 @@ data. Language patterns are in `scripts/export_data.py` (`LANGUAGES`).
 
 ## On this day, daily
 
+Renders pick WebGL on the GPU (`angle`) when there is one and fall back to the CPU
+(`swangle`, the same picture, about 15x slower) on a Linux machine without one; set
+`HN_GL=angle|swangle` to force either (see `remotion.config.ts`).
+
 The daily video is a one-shot, code-only film of one story's subject: a device, the
 interface of the time, a process or a scene (the first one: the iPhone X teardown in
 `src/spike/`). The whole process lives in the Claude Code

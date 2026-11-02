@@ -8,6 +8,7 @@ root; ffmpeg/ffprobe are called through `npx remotion` inside videos/.
 """
 
 import argparse
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,7 +20,8 @@ VIDEOS = Path(__file__).resolve().parents[4] / "videos"
 
 def remotion(*args: str) -> str:
     return subprocess.run(
-        ["npx", "remotion", *args], cwd=VIDEOS, capture_output=True, text=True, check=True, shell=True
+        # npx is npx.cmd on Windows, which needs a shell to run
+        ["npx", "remotion", *args], cwd=VIDEOS, capture_output=True, text=True, check=True, shell=os.name == "nt"
     ).stdout
 
 

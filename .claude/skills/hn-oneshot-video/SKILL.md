@@ -39,8 +39,8 @@ description: 制作「HN 上的今天」横屏短视频的现行流程：从当�
 ### 1. 选题
 
 ```bash
-cd videos && ../.venv/Scripts/python.exe scripts/daily.py prepare                    # 今天
-cd videos && ../.venv/Scripts/python.exe scripts/daily.py prepare --date 2026-11-03
+cd videos && uv run python scripts/daily.py prepare                    # 今天
+cd videos && uv run python scripts/daily.py prepare --date 2026-11-03
 ```
 
 运行后得到 `out/daily/<日期>/candidates.json`，里面是往年每一年当天的前 3 条。挑选时按以下顺序考虑：
@@ -72,7 +72,7 @@ uv run python .claude/skills/hn-oneshot-video/scripts/frontpage.py --date 2011-1
 
 ```bash
 cd videos
-npx remotion still src/index.ts <CompositionId> out/shots/<slug>/k<帧号>.png --gl=angle --frame=<帧号>
+npx remotion still src/index.ts <CompositionId> out/shots/<slug>/k<帧号>.png --frame=<帧号>
 ```
 
 挑 4–7 个关键时刻拼成联系表，对照 `references/review.md` 逐条检查，每轮只改看到的问题。
@@ -94,15 +94,20 @@ npx remotion still src/index.ts <CompositionId> out/shots/<slug>/k<帧号>.png -
 
 ```bash
 cd videos
-npx remotion render src/index.ts <CompositionId> out/shots/<slug>/<slug>.mp4 --gl=angle --crf=20 --concurrency=4
+npx remotion render src/index.ts <CompositionId> out/shots/<slug>/<slug>.mp4 --crf=20 --concurrency=4
 ```
 
-`--gl=angle` 会走本机 RTX 3070，14 秒的片子大约 1 分钟内渲完。不确定是否用上了显卡时，渲一下 `GpuProbe` 这个 composition 确认。文件要小于 30 MB，超了就把 `--crf` 调到 22–26。
+不要在命令里加 `--gl`，`remotion.config.ts` 会自动选择渲染方式：
+
+- **有 GPU**（本机 RTX 3070、Windows、macOS）：用 `angle`，WebGL 跑在显卡上，14 秒的片子 1–2 分钟渲完。
+- **没有 GPU**（例如云端 Linux 容器里没有 `/dev/dri`）：自动改用 `swangle`，也就是 SwiftShader 的 CPU 软件渲染。画面和 GPU 一致（实测平均像素差不到 1），只是慢大约 15 倍：30 帧约 5 分半，14 秒的片子约 1 小时。
+- 要强制某一种，用环境变量 `HN_GL=swangle` 或 `HN_GL=angle`。命令行的 `--gl=...` 优先级最高。
+- 想确认实际用的是哪一种，渲一下 `GpuProbe` 这个 composition，并加上 `--log=verbose`：RENDERER 里出现 NVIDIA 是 GPU，出现 SwiftShader 是 CPU。文件要小于 30 MB，超了就把 `--crf` 调到 22–26。
 
 ### 7. 自检后交付
 
 ```bash
-python -I .claude/skills/hn-oneshot-video/scripts/contact_sheet.py videos/out/shots/<slug>/<slug>.mp4 --count 20
+uv run --with pillow python .claude/skills/hn-oneshot-video/scripts/contact_sheet.py videos/out/shots/<slug>/<slug>.mp4 --count 20
 ```
 
 看联系表，检查连续性和穿帮，然后用 SendUserFile 把 MP4 发给用户。交付时说明这几点：
