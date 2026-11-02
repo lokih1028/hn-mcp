@@ -46,7 +46,7 @@
   ```
 
   构建结果写到 `data/stories/`，`videos/scripts/daily.py` 和 skill 里的脚本都从这里读。
-- 仓库**没有发布预构建的索引快照**（GitHub release 里没有 `hn-index.zip`），所以第一次 sync 会从 Hugging Face 数据集 `open-index/hacker-news` 读存档，再从 Algolia（hn.algolia.com）逐天补最近一年的数据。会很慢，需要联网。
+- 仓库的 GitHub Release 里有预构建的索引快照（`hn-index.zip`，约 420 MB，数据截至 2026-11-02）。第一次 sync 会直接下载它，再从 Algolia 补上之后的几天，几分钟就能完成。只有加 `--no-snapshot` 时，才会从 Hugging Face 数据集 `open-index/hacker-news` 从头构建，那样要好几个小时。
 - 只想重新渲染已有的两条视频的话，不需要索引：它们用到的当天首页数据已经在仓库里（`videos/src/spike/frontpage-2017-11-03.json`、`videos/src/shots/2011-11-03-barrel-roll/frontpage.json`）。
 
 ### 6. 联网
@@ -56,7 +56,7 @@
 - npm 和 PyPI 安装依赖
 - 下载 Chrome Headless Shell
 - 渲染时从 Google Fonts 下载字体
-- 构建索引时访问 Hugging Face 和 Algolia
+- 构建索引时访问 GitHub Release（下载快照）和 Algolia
 
 如果你的运行阶段默认断网，安装和 sync 放到环境初始化脚本里做；渲染阶段至少要放行 Google Fonts 的两个域名。
 
